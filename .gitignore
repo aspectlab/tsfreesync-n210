@@ -1,0 +1,15 @@
+# Ignore Autosaved files #
+##########################
+.gitignore~
+*.txt~
+.atom-build.json
+.atom-build.json~
+
+# Ignore Build Directory #
+##########################
+build/
+
+# Ignore Finder Bulls*** #
+##########################
+.DS_Store
+__MACOSX
