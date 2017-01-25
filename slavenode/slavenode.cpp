@@ -16,11 +16,11 @@
 #define WRITESINC       1                       // Write Sinc (binary) if 1, debug sinc pulse
                                                 // is written to file "./sinc.dat"
 
-#define DURATION        60                      // Length of time to record in seconds
+#define DURATION        30                      // Length of time to record in seconds
 
 #define WRITEXCORR      1                       // Write cross correlation to file (binary)
 
-#define WRITERX         0                       // Write receive buffer to file (binary)
+#define WRITERX         1                       // Write receive buffer to file (binary)
 
 #define WRITEKAL        0                       // Write Kalman filter components to file
 
@@ -284,14 +284,14 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
                 // Cross correlation for circular buffer
             if(rxbuff_ctr == 0){
                 for(j = 0; j < SPB-1-i; j++){
-                    xcorr += rxbuffs[NUMRXBUFFS-1][i+j+1].real() * xcorr_sinc[j];
+                    xcorr += (CINT64)rxbuffs[NUMRXBUFFS-1][i+j+1].real() * (CINT64)xcorr_sinc[j];
                 }
                 for(j = SPB-1-i; j < SPB; j++){
-                    xcorr += rxbuffs[0][-SPB+1+i+j].real() * xcorr_sinc[j];
+                    xcorr += (CINT64)rxbuffs[0][-SPB+1+i+j].real() * (CINT64)xcorr_sinc[j];
                 }
             }else{
                 for (j = 0; j < SPB; j++) {
-                    xcorr += rxbuffs[rxbuff_ctr-1][i+j+1].real() * xcorr_sinc[j];
+                    xcorr += (CINT64)rxbuffs[rxbuff_ctr-1][i+j+1].real() * (CINT64)xcorr_sinc[j];
                 }
             }
 
@@ -344,8 +344,9 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
             /** Delay estimator (atan2 fractional delay & Kalman filter) ******/
 
                 // Calculate fractional offset
-            fdel = std::atan2(exact_max.center.imag(), exact_max.center.real())/CBW;
+            fdel = std::atan2(exact_max.center.imag(), exact_max.center.real())/(CBW*PI);
             std::cout << "fdel " << fdel << std::endl;
+            fdel = 0;
 
                 // Actual roundtrip time is buff_timer * SPB + (exact_max.center_pos - 999) + fdel.
             if(buff_timer & 1){
