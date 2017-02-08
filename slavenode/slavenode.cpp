@@ -32,11 +32,11 @@
 #define HW_CAL          0                       // Measured hardware delay calibration (seconds)
 
     // Kalman Filter Gains
-#define KALGAIN1        0.0036                  // Gain for master clock time estimate (set to 1.0 to prevent Kalman update) (experimentally derived)
-#define KALGAIN2        1e-06                   // Gain for master clock rate estimate (set to 0.0 to prevent Kalman update) (experimentally derived)
+#define KALGAIN1        0.04                    // Gain for master clock time estimate (set to 1.0 to prevent Kalman update) (experimentally derived)
+#define KALGAIN2        0.5e-05                   // Gain for master clock rate estimate (set to 0.0 to prevent Kalman update) (experimentally derived)
 // #define KALGAIN1        1.0                     // Gain for master clock time estimate (set to 1.0 to prevent Kalman update) (experimentally derived)
 // #define KALGAIN2        0.0                     // Gain for master clock rate estimate (set to 0.0 to prevent Kalman update) (experimentally derived)
-#define RATE_SEED       1.00000033770892        // Seed value for rate_est (experimentally derived)
+#define RATE_SEED       1.0001                  // Seed value for rate_est (experimentally derived)
 #define CLKRT           0.0                     // Clockrate estimate
 
 
@@ -193,10 +193,10 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
         // Generate sinc pulse for cross correlation
     Sinc_Gen_XC(&xcorr_sinc.front(), XCORR_AMP, SPB);
 
-        // Conjugate correlation sinc pulse
-    for (j = 0; j < SPB; j++){
-        xcorr_sinc[j] = std::conj(xcorr_sinc[j]);
-    }
+    //     // Conjugate correlation sinc pulse
+    // for (j = 0; j < SPB; j++){
+    //     xcorr_sinc[j] = std::conj(xcorr_sinc[j]);
+    // }
 
         // Generate synchronization and debug sinc pulses
     Sinc_Gen_TX(&tx_sinc.front(), TX_AMP, SPB, 0.0, tx_ping);
@@ -258,6 +258,8 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
 
         // grab initial block of received samples from USRP with nice long timeout (gets discarded)
     rx_stream->recv(rxbuffs[0], SPB, md_rx, 3.0);
+
+    std::cout << "coarse, fine, corr" << std::endl;
 
     while(not stop_signal_called){
         /***********************************************************************
@@ -330,7 +332,7 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
          * CALCULATING block - Finds delay and synchronizes
          **********************************************************************/
         if(calculate == true){
-            std::cout << boost::format("Ping RX Time %10.5f") % (md_rx.time_spec.get_full_secs() + md_rx.time_spec.get_frac_secs()) << std::endl; // << std::endl;
+            // std::cout << boost::format("Ping RX Time %10.5f") % (md_rx.time_spec.get_full_secs() + md_rx.time_spec.get_frac_secs()) << std::endl; // << std::endl;
 
                 // Did previous buffer have largest peak?
             if(std::abs(prev_max.center.real()) > std::abs(crnt_max.center.real())){        // YES
@@ -343,10 +345,24 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
 
             /** Delay estimator (atan2 fractional delay & Kalman filter) ******/
 
+                // Negate center value if real value is negative
+            if(exact_max.center.real() < 0){
+                exact_max.center = CINT64(-1,0)*exact_max.center;
+            }else{}
+
                 // Calculate fractional offset
             fdel = std::atan2(exact_max.center.imag(), exact_max.center.real())/(CBW*PI);
-            std::cout << "fdel " << fdel << std::endl;
-            fdel = 0;
+            std::cout << exact_max.center_pos << ", " << std::flush;
+            std::cout << fdel << std::flush;
+            std::cout << ", " << exact_max.center.real() << std::flush;
+            if(exact_max.center.imag() >= 0){
+                std::cout << "+" << exact_max.center.imag() << std::flush;
+            }else{
+                std::cout << exact_max.center.imag() << std::flush;
+            }
+            std::cout << "i" << std::endl;
+
+            // fdel = 0;
 
                 // Actual roundtrip time is buff_timer * SPB + (exact_max.center_pos - 999) + fdel.
             if(buff_timer & 1){
@@ -379,10 +395,10 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
                 rate_est  = rate_pred + k_gain2 * pred_error;       // Estimate clock rate of master
 
                     // Slowly decrease kalman gain
-                if(k_gain1 > KALGAIN1){
-                    k_gain1 = k_gain1*0.999;
-                }else{}
-                k_gain2 = k_gain2*0.999;
+                // if(k_gain1 > KALGAIN1){
+                //     k_gain1 = k_gain1*0.999;
+                // }else{}
+                // k_gain2 = k_gain2*0.999;
 
                     // On first calc run only, to keep rate_est from straying too far from 1
                 if(first_calc){
@@ -403,7 +419,7 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
 
                 // Display computed delay on terminal
             // std::cout << boost::format("Computed Delay %10.5f") % (time_est + TXDELAY * (rate_est - 1) * SPB + SPB/2 + 347.85) << std::endl << std::endl;
-            std::cout << boost::format("cdel %f") % (exact_max.center_pos) << std::endl << std::endl;
+
 
                 // Exit calculating mode
             calculate = false;
@@ -431,7 +447,7 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
             ping_ctr = 0;                       // Reset ping counter
 
                 // Display transmission detail on terminal
-            std::cout << boost::format("Ping TX Time %10.5f") % (md_tx.time_spec.get_full_secs() + md_tx.time_spec.get_frac_secs()) << std::endl;
+            // std::cout << boost::format("Ping TX Time %10.5f") % (md_tx.time_spec.get_full_secs() + md_tx.time_spec.get_frac_secs()) << std::endl;
         } else {
             tx_ping = false;                    // Clear ping flag
             ping_ctr++;                         // Increment counter

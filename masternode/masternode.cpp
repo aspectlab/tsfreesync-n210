@@ -135,10 +135,10 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
         // Generate sinc pulse for cross correlation
     Sinc_Gen_XC(&xcorr_sinc.front(), XCORR_AMP, SPB);
 
-        // Conjugate correlation sinc pulse
-    for (j = 0; j < SPB; j++){
-        xcorr_sinc[j] = std::conj(xcorr_sinc[j]);
-    }
+    //     // Conjugate correlation sinc pulse
+    // for (j = 0; j < SPB; j++){
+    //     xcorr_sinc[j] = std::conj(xcorr_sinc[j]);
+    // }
 
         // Initialise rxbuffs (Vector of pointers)
     for(i = 0; i < NUMRXBUFFS; i++){
