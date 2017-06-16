@@ -25,18 +25,18 @@
 #define WRITEKAL        0                       // Write Kalman filter components to file
 
     // Radio Parameters
-#define SAMPRATE        150e3                   // Sampling Rate (Hz)
+#define SAMPRATE        250e3                   // Sampling Rate (Hz)
 #define CARRIERFREQ     0                       // Carrier Frequency (Hz)
 #define CLOCKRATE       30.0e6                  // Clock Rate (Hz)
 #define USRPIP          "addr=192.168.10.13"    // Ip string of USRP
-#define HW_CAL          0                       // Measured hardware delay calibration (seconds)
+#define HW_CAL          (5.12e-6/2)-384.39e-9   // Measured hardware delay calibration (seconds)
 
     // Kalman Filter Gains
-#define KALGAIN1        0.04                    // Gain for master clock time estimate (set to 1.0 to prevent Kalman update) (experimentally derived)
-#define KALGAIN2        0.5e-05                   // Gain for master clock rate estimate (set to 0.0 to prevent Kalman update) (experimentally derived)
+#define KALGAIN1        0.1                     // Gain for master clock time estimate (set to 1.0 to prevent Kalman update) (experimentally derived)
+#define KALGAIN2        0.0                     // Gain for master clock rate estimate (set to 0.0 to prevent Kalman update) (experimentally derived)
 // #define KALGAIN1        1.0                     // Gain for master clock time estimate (set to 1.0 to prevent Kalman update) (experimentally derived)
 // #define KALGAIN2        0.0                     // Gain for master clock rate estimate (set to 0.0 to prevent Kalman update) (experimentally derived)
-#define RATE_SEED       1.0001                  // Seed value for rate_est (experimentally derived)
+#define RATE_SEED       1.0000                  // Seed value for rate_est (experimentally derived)
 #define CLKRT           0.0                     // Clockrate estimate
 
 
@@ -46,7 +46,7 @@
 #define TXDELAY         3                       // Number of Buffers to Delay transmission (Must Be Odd)
 #define BW              0.45                    // Normalized Bandwidth of Sinc pulse (1 --> Nyquist)
 #define CBW             0.5                     // Normalized Freq Offset of Sinc Pulse (1 --> Nyquist)
-#define SYNC_PERIOD     56                      // Sync Period (# of buffers, 11 is safe minimum)
+#define SYNC_PERIOD     14                      // Sync Period (# of buffers, 11 is safe minimum)
 
 
 #define SINC_PRECISION  10000                   // Precision of sinc pulse delays relative to SAMPRATE
@@ -96,7 +96,7 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
     usrp_rx->set_clock_source(std::string("internal"));                                     // lock mboard clocks
     usrp_rx->set_time_source("none");                                                       // Use PPS signal
     usrp_rx->set_rx_subdev_spec(std::string("A:A"));                                        // select the subdevice
-    usrp_rx->set_rx_rate(usrp_tx->get_tx_rate(),0);                                                       // set the sample rate
+    usrp_rx->set_rx_rate(usrp_tx->get_tx_rate(),0);                                         // set the sample rate
     usrp_rx->set_rx_freq(tune_request,0);                                                   // set the center frequency
     usrp_rx->set_rx_antenna(std::string("RX2"),0);                                          // set the antenna
     boost::this_thread::sleep(boost::posix_time::seconds(1.0));                             // allow for some setup time
@@ -166,11 +166,11 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
     FP64  rate_pred         = 1.0;                      // Rate prediction of master
     FP64  pred_error        = 0.0;                      // Prediction error
     INT32 buff_timer        = 0;                        // Timer for time between transmitting and receiving a pulse
-    INT32 bt_avg            = 0;                        // Movinga average variable
+    INT32 bt_avg            = 0;                        // Moving average variable
     std::vector< INT32 >  bt_vec(3);                    // Moving average for buff timer
 
-    FP32  k_gain1           = 01.0;                     // Kalman gain 1
-    FP32  k_gain2           = KALGAIN2;                 // Kalman gain 2
+    FP64  k_gain1           = KALGAIN1;                 // Kalman gain 1
+    FP64  k_gain2           = KALGAIN2;                 // Kalman gain 2
 
         // Counters
     INT16U ping_ctr         = 0;                        // Counter for transmitting pulses
@@ -351,7 +351,7 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
             }else{}
 
                 // Calculate fractional offset
-            fdel = std::atan2(exact_max.center.imag(), exact_max.center.real())/(CBW*PI);
+            fdel = std::atan2((FP64)exact_max.center.imag(), (FP64)exact_max.center.real())/(FP64)(CBW*PI);
             std::cout << exact_max.center_pos << ", " << std::flush;
             std::cout << fdel << std::flush;
             std::cout << ", " << exact_max.center.real() << std::flush;
@@ -366,9 +366,9 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
 
                 // Actual roundtrip time is buff_timer * SPB + (exact_max.center_pos - 999) + fdel.
             if(buff_timer & 1){
-                clockoffset = (exact_max.center_pos+fdel+SPB+1)/2;
+                clockoffset = ((FP64)exact_max.center_pos+(FP64)fdel+(FP64)SPB)/(FP64)2;
             }else{
-                clockoffset = (exact_max.center_pos+fdel+1)/2;
+                clockoffset = ((FP64)exact_max.center_pos+(FP64)fdel)/(FP64)2;
             }
 
                 // Moving average of buff timer (Prevents glitching if pulse is lost)
@@ -407,14 +407,14 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
                 }else{}
 
                     // Update Predictions
-                time_pred = time_est + (rate_est - 1) * SPB;        // Predict time of master
+                time_pred = time_est + (rate_est - 1) * (FP64)SPB;        // Predict time of master
                 rate_pred = rate_est;                               // Predict rate of master
 
             }else{
                     // If buff_timer is unstable, use predicted values for update
                 time_est  = time_pred;                              // Update estimate with prediction
                 rate_est  = rate_pred;                              // Update rate estimate with prediction
-                time_pred = time_est + (rate_est - 1) * SPB;        // Generate new time prediction based on rate_est
+                time_pred = time_est + (rate_est - 1) * (FP64)SPB;        // Generate new time prediction based on rate_est
             }
 
                 // Display computed delay on terminal
@@ -428,7 +428,7 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
         }else{
             time_est  = time_pred;                                  // Update estimate with prediction
             rate_est  = rate_pred;                                  // Update rate estimate with prediction
-            time_pred = time_est + (rate_est - 1) * SPB;            // Generate new time prediction based on rate_est
+            time_pred = time_est + (rate_est - 1) * (FP64)SPB;            // Generate new time prediction based on rate_est
         }
 
         /***********************************************************************
@@ -457,8 +457,9 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
         // clkrt_ctr = clkrt_ctr + CLKRT;   // Experimentally derived offset, produces flat segments of 20 samples
         // Sinc_Gen_TX(&tx_sinc.front(), TX_AMP, SPB,  clkrt_ctr);
 
+        // std::cout << std::endl << time_est + (FP64)TXDELAY * (rate_est - 1) * (FP64)SPB + usrp_tx->get_tx_rate()*HW_CAL << std::endl << std::endl;
             // Generate delayed pulse
-        Sinc_Gen_TX(&tx_sinc.front(), TX_AMP, SPB,  time_est + TXDELAY * (rate_est - 1) * SPB + usrp_tx->get_tx_rate()*HW_CAL, tx_ping);
+        Sinc_Gen_TX(&tx_sinc.front(), TX_AMP, SPB,  time_est + (FP64)TXDELAY * (rate_est - 1.0) * (FP64)SPB + usrp_tx->get_tx_rate()*HW_CAL, tx_ping);
         // Sinc_Gen_TX(&tx_sinc.front(), TX_AMP, SPB, clockoffset+usrp_tx->get_tx_rate()*HW_CAL, tx_ping);
 
             // Transmit both buffers

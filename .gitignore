@@ -1,3 +1,4 @@
+
 # Ignore Autosaved files #
 ##########################
 .gitignore~
@@ -5,9 +6,15 @@
 .atom-build.json
 .atom-build.json~
 
-# Ignore Build Directory #
+#Ignore These Directories#
 ##########################
 build/
+DATDump/
+previous\ dats/
+
+# Ignore Temporary Files #
+##########################
+*~
 
 # Ignore Finder Bulls*** #
 ##########################

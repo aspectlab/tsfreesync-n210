@@ -5,7 +5,10 @@
 % Requires Real_SincInit.m and SincGen.m for sinc pulse generation
 %
 % Joseph Canfield, July 20, 2016
-% Last modified : Jan 3, 2017
+% Last modified : Jan 3, 2017 J.C.
+%               : May 20, 2017 T.C.
+%                   added axis range to error plot
+
 iterations  = 4999;                         % number of delayed pulses to be generated
 max_dly     = 1.5;                          % maximum +/- delay of generated Sinc Pulse
 dly_step    = 2*max_dly/(iterations+1);     % Calculate increment of the delay to achieve # of iterations
@@ -19,6 +22,7 @@ fs          = 195.312e3;                    % Sampling frequency
 Ts          = 1/fs;                         % Sample Period
 fc          = cbw*fs/2;                     % Center frequency of modulated pulse
 SNR_dB      = 60;                           % SNR in dB
+noDelay     = 0.0;
 
 % Preallocate Vectors
 sse         = zeros(1,length(bwvec));
@@ -36,7 +40,7 @@ for b = 1:length(bwvec)
     OS_Sinc = Real_SincInit(bw, spb, ratio);
     
     % Generate Undersampled unshifted pulse
-    template = SincGen(OS_Sinc,ampl, spb, 0.0);
+    template = SincGen(OS_Sinc,ampl, spb, noDelay);
     
     % Generate Sin and Cos modulated template pulses
     si    = (template.*cos(2*pi*fc*t));
@@ -94,10 +98,10 @@ for b = 1:length(bwvec)
     % Plot results for each bandwidth
     figure(54);subplot(211);plot(delay,full_delay);grid on;
     title('Joe''s Code');xlabel('True Delay');
-    ylabel('Measured Delay');
+    ylabel('Measured Delay');axis([-1.5 1.5 -1.5 1.5]);
     subplot(212);plot(delay,err,'.');grid on;%axis([-max_dly max_dly -0.05 0.05]);
     title('Error vs. True Delay');xlabel('True Delay');
-    ylabel('Error');
+    ylabel('Error');axis([-1.5 1.5 -0.1 0.1]);
     pause(0.1);
     
     % Print results of each test to terminal

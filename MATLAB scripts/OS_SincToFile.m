@@ -5,7 +5,7 @@ fold = './';
 file = 'OS_Sinc.dat';
 
 % Sinc Pulse Parameters
-bw  = .058;     % Normalized Bandwidth
+bw  = .4;     % Normalized Bandwidth
 cbw = .5;       % Normalized Carrier Bandwidth
 spb = 1000;     % Samples per buffer(length of undersampled pulse)
 ratio = 10000;  % Ratio of samples, length(OS_Sinc) = spb * ratio;

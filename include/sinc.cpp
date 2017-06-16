@@ -54,7 +54,8 @@ void Sinc_Init(FP32 bw, FP32 cbw, INT32U spb, INT16U ratio){
      INT32U length  =   0;          // The length (n samples) of sinc pulse
      FP32   w0      =   0;          // Normalized bandwidth of carrier
      FP32   eta     =   0;          // Normalized bandwidth of sinc pulse
-     INT64  j, i;                   // Counter
+     INT64  j;                      // Counter
+     FP32   i;                      // Another counter 
 
      Sinc_Ratio = ratio;            // Save ratio for external access
 
@@ -70,7 +71,7 @@ void Sinc_Init(FP32 bw, FP32 cbw, INT32U spb, INT16U ratio){
         eta = bw*PI;
 
         for(j = 0; j < length; j++){
-            i = j/Sinc_Ratio - spb/2;    // i is the oversampled step size
+            i = FP64(j)/FP64(Sinc_Ratio) - spb/2;    // i is the oversampled step size
 
                 // When i is not zero, generate sinc pulse as usual
             if(i != 0){

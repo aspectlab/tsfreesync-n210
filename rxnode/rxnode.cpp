@@ -1,5 +1,5 @@
 /*******************************************************************************
- * rxnode.cpp
+ * rxnode.cpp - N210
  *
  * This source file implements a two channel receiver on the USRP E310.
  *
@@ -11,11 +11,13 @@
 
     // tweakable parameters
 #define DURATION        30          // Length of time to record in seconds
-#define SAMPRATE        3e6         // sampling rate (Hz)
-#define CARRIERFREQ     900.0e6     // carrier frequency (Hz)
+#define SAMPRATE        5e6         // sampling rate (Hz)
+#define CARRIERFREQ     0           // carrier frequency (Hz) (Changed from 900.0e6)
 #define CLOCKRATE       30.0e6      // clock rate (Hz)
 #define RXGAIN          16.0        // Rx frontend gain in dB
 #define SPB             1000        // samples per buffer
+
+#define USRPIP          "addr=192.168.11.12"
 
 /*******************************************************************************
  * Signal handlers
@@ -58,7 +60,7 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
     /** Main code *************************************************************/
 
         // set USRP Rx params
-    uhd::usrp::multi_usrp::sptr usrp_rx = uhd::usrp::multi_usrp::make(std::string("")); // create a usrp device
+    uhd::usrp::multi_usrp::sptr usrp_rx = uhd::usrp::multi_usrp::make(std::string(USRPIP)); // create a usrp device
     uhd::tune_request_t tune_request(CARRIERFREQ);                                      // validate tune request
     usrp_rx->set_master_clock_rate(CLOCKRATE);                                          // set clock rate
     usrp_rx->set_clock_source(std::string("internal"));                                 // lock mboard clocks
@@ -71,8 +73,8 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
     usrp_rx->set_rx_freq(tune_request,1);                                               // set the center frequency (Ch 1)
     usrp_rx->set_rx_gain(RXGAIN,0);                                                     // set the rf gain (Ch 0)
     usrp_rx->set_rx_gain(RXGAIN,1);                                                     // set the rf gain (Ch 1)
-    usrp_rx->set_rx_antenna(std::string("TX/RX"),0);                                    // set the antenna (Ch 0)
-    usrp_rx->set_rx_antenna(std::string("TX/RX"),1);                                    // set the antenna (Ch 1)
+    usrp_rx->set_rx_antenna(std::string("RX2"),0);                                      // set the antenna (Ch 0)
+    usrp_rx->set_rx_antenna(std::string("RX2"),1);                                      // set the antenna (Ch 1)
     boost::this_thread::sleep(boost::posix_time::seconds(1.0));                         // allow for some setup time
 
         // check Ref and LO Lock detect for Rx

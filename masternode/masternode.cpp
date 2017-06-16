@@ -21,7 +21,7 @@
 #define WRITEXCORR      1                       // Write normalized cross correlation to file (binary)
 
     // Radio Parameters
-#define SAMPRATE        150e3                   // Sampling rate (Hz)
+#define SAMPRATE        250e3                   // Sampling rate (Hz)
 #define CARRIERFREQ     0                       // Carrier frequency (Hz)
 #define CLOCKRATE       30.0e6                  // Clock rate (Hz)
 #define USRPIP          "addr=192.168.10.11"    // Ip string of USRP
@@ -64,12 +64,13 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
     usrp_tx->set_master_clock_rate(CLOCKRATE);                                              // set clock rate
     usrp_tx->set_clock_source(std::string("internal"));                                     // lock mboard clocks
     usrp_tx->set_tx_subdev_spec(std::string("A:BA"));                                       // select the subdevice (2-channel mode)
-    usrp_tx->set_tx_rate(SAMPRATE);                                                         // set the sample rate
+    usrp_tx->set_tx_rate(SAMPRATE);
+    std::cout << boost::format("Actual TX Rate: %f Msps...") % (usrp_tx->get_tx_rate()/1e6) << std::endl;
+                                                           // set the sample rate
     uhd::tune_request_t tune_request(CARRIERFREQ);                                          // validate tune request
     usrp_tx->set_tx_freq(tune_request,0);                                                   // set the center frequency of chan0
     usrp_tx->set_tx_antenna("TX/RX",0);                                                     // set the antenna of chan0
-    boost::this_thread::sleep(boost::posix_time::seconds(1.0));                             // allow for some setup time
-
+    boost::this_thread::sleep(boost::posix_time::seconds(1.0));
         // create a USRP RX device
     uhd::usrp::multi_usrp::sptr usrp_rx = uhd::usrp::multi_usrp::make(std::string(USRPIP));
     usrp_rx->set_master_clock_rate(CLOCKRATE);                                              // set clock rate

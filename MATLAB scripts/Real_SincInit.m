@@ -17,7 +17,7 @@ function [ OS_table ] = Real_SincInit( bw, spb, ratio)
 global STU;            % Stupid constant because MATLAB doesn't like 0
 STU = 1;
 global SCALAR;
-SCALAR = 32767;
+SCALAR = 32767;   % what's the significance of this number?
 
 len = spb*ratio;   % length of the oversampled pulse
 
