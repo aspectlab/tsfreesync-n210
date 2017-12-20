@@ -33,6 +33,6 @@ SlaveNode:
 RXNode:
     RXNode is for recording two channels for a configurable amount of time. After the recording is completed, the files are saved to a *.dat file for analysis in applications such as Octave and MATLAB.
     
-TXNode:
+precision_test:
     TXNode is for transmitting pulses on two channels indefinitely. This program is intended for diagnostics of the USRP hardware to test the phase difference between TX channels on the device and RX channels on a recording device such as the RXNode. 
 
