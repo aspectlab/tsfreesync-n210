@@ -46,3 +46,4 @@ template void writebuff<INT32U>(const char* fname, INT32U *pbuff, int size);
 template void writebuff<INT64U>(const char* fname, INT64U *pbuff, int size);
 template void writebuff<FP32>(const char* fname, FP32 *pbuff, int size);
 template void writebuff<FP64>(const char* fname, FP64 *pbuff, int size);
+template void writebuff<INT64>(const char* fname, INT64 *pbuff, int size);

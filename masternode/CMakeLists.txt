@@ -32,6 +32,6 @@ set(RESOURCES
 add_executable(masternode masternode.cpp ${RESOURCES})
 
 SET(CMAKE_BUILD_TYPE "RELEASE")
-SET (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
+SET (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -mavx2")
 
 target_link_libraries(masternode ${UHD_LIBRARIES} ${Boost_LIBRARIES})

@@ -16,49 +16,64 @@
 #define WRITESINC       1                       // Write Sinc (binary) if 1, debug sinc pulse
                                                 // is written to file "./sinc.dat"
 
-#define DURATION        60                      // Length of time to record in seconds
+#define DURATION        30                     // Length of time to record in seconds
 
-#define WRITEXCORR      1                       // Write cross correlation to file (binary)
+#define DELAY           5                      // Amount of time before recording starts in seconds
 
-#define WRITERX         0                       // Write receive buffer to file (binary)
+#define WRITEXCORR      0                       // Write cross correlation to file (binary)
 
-#define WRITEKAL        0                       // Write Kalman filter components to file
+#define WRITERX         1                       // Write receive buffer to file (binary)
+
+#define WRITEKAL        1                       // Write Kalman filter components to
+
+#define WRITETX         1                       // Write transmission buffer to file (binary)
+
+#define WRITEREADME     1
 
     // Radio Parameters
-#define SAMPRATE        150e3                   // Sampling Rate (Hz)
+#define SAMPRATE        250e3                   // Sampling Rate (Hz)
 #define CARRIERFREQ     0                       // Carrier Frequency (Hz)
 #define CLOCKRATE       30.0e6                  // Clock Rate (Hz)
 #define USRPIP          "addr=192.168.10.13"    // Ip string of USRP
-#define HW_CAL          0                       // Measured hardware delay calibration (seconds)
+#define HW_CAL          -0.939e-3//-1.74e-3//0.443e-3//0.680e-3//-0.962e-3//.0012                  // Measured hardware delay calibration (tx_delays)
 
     // Kalman Filter Gains
-#define KALGAIN1        0.0036                  // Gain for master clock time estimate (set to 1.0 to prevent Kalman update) (experimentally derived)
-#define KALGAIN2        1e-06                   // Gain for master clock rate estimate (set to 0.0 to prevent Kalman update) (experimentally derived)
-// #define KALGAIN1        1.0                     // Gain for master clock time estimate (set to 1.0 to prevent Kalman update) (experimentally derived)
-// #define KALGAIN2        0.0                     // Gain for master clock rate estimate (set to 0.0 to prevent Kalman update) (experimentally derived)
-#define RATE_SEED       1.00000033770892        // Seed value for rate_est (experimentally derived)
+#define KALGAIN1_START  0.6707//0.65                        // Gain for master clock time estimate (set to 1.0 to prevent Kalman update)
+#define KALGAIN2_START  1.1698e-5//1e-6                    // Gain for master clock rate estimate (set to 0.0 to prevent Kalman update)
+#define KALGAIN1_STOP   0.65                     // Gain for master clock time estimate (experimentally derived)
+#define KALGAIN2_STOP   1e-6                    // Gain for master clock rate estimate (experimentally derived)
+#define KALGAIN_UPDATE  0                       // Enables KALGAINX_START to converge to KALGAINX_STOP (0 for off, 1 for on)
+#define RATE_DIFF       0              // The difference between the Master and Slave periods
+#define RATE_SEED       (1.0 + RATE_DIFF)       // Seed value for rate_est (experimentally derived)
 #define CLKRT           0.0                     // Clockrate estimate
-
 
     // Transmission parameters
 #define SPB             1000                    // Samples Per Buffer SYNC_PERIOD
 #define NRXBUFFS        3                       // Number of Receive Buffers (circular)
 #define TXDELAY         3                       // Number of Buffers to Delay transmission (Must Be Odd)
-#define BW              0.45                    // Normalized Bandwidth of Sinc pulse (1 --> Nyquist)
-#define CBW             0.5                     // Normalized Freq Offset of Sinc Pulse (1 --> Nyquist)
-#define SYNC_PERIOD     56                      // Sync Period (# of buffers, 11 is safe minimum)
-
-
+#define CBW             0.8  //0.5                     // Normalized Freq Offset of Sinc Pulse (1 --> Nyquist)
+#define BW              0.02   //CBW*0.9                 // Normalized Bandwidth of Sinc pulse (1 --> Nyquist)
+#define SYNC_PERIOD     15                      // Sync Period (# of buffers, 11 is safe minimum)
 #define SINC_PRECISION  10000                   // Precision of sinc pulse delays relative to SAMPRATE
-                                                // Precision in seconds = 1/(SAMPRATE*SINC_PRECISION)
+                                               // Precision in seconds = 1/(SAMPRATE*SINC_PRECISION)
 
     // Sinc pulse amplitudes (integer)
-#define XCORR_AMP       128                     // Peak value of sinc pulse generated for cross correlation
+#define XCORR_AMP       0x400                   // Peak value of sinc pulse generated for cross correlation
 #define TX_AMP          0x7FFF                  // Peak value of sinc pulse generated for debug channel (max 32768)
-
-#define THRESHOLD       5e3                     // Threshold of cross correlation pulse detection
+#define THRESHOLD       15e5                     // Threshold of cross correlation pulse detection
 #define XCORR_SHIFT     3                       // How many times to divide the cross correlation by 2 before normalizing
 
+    // Calculation defines
+#define FDEL_SCALE      1//(0.5/0.4477)
+#define FDEL_THRESH     .48
+#define STRINGIFY(x)    #x
+
+    // Print values for debugging purposes
+#define PING_TIMES      0                       // Prints ping times to the terminal
+#define OFFSET_CALC     1                       // Prints the course and fine offsets to the terminal
+#define WRITE_COUNTERS  1                       // Prints the write and delay times to the terminal (Requires debug to be enabled and at least one WRITE debug)
+
+#define NUM_DEFINES     25                      // The number of defines written to file, must be updated when more defines are added.
     // Structure for handling pulse detections
 typedef struct {
             INT32U center_pos;                  // Position of pulse within buffer
@@ -95,32 +110,40 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
     usrp_rx->set_master_clock_rate(CLOCKRATE);                                              // set clock rate
     usrp_rx->set_clock_source(std::string("internal"));                                     // lock mboard clocks
     usrp_rx->set_time_source("none");                                                       // Use PPS signal
-    usrp_rx->set_rx_subdev_spec(std::string("A:A"));                                        // select the subdevice
-    usrp_rx->set_rx_rate(usrp_tx->get_tx_rate(),0);                                                       // set the sample rate
+    usrp_rx->set_rx_subdev_spec(std::string("A:B"));                                        // select the subdevice
+    usrp_rx->set_rx_rate(usrp_tx->get_tx_rate(),0);                                         // set the sample rate
     usrp_rx->set_rx_freq(tune_request,0);                                                   // set the center frequency
     usrp_rx->set_rx_antenna(std::string("RX2"),0);                                          // set the antenna
     boost::this_thread::sleep(boost::posix_time::seconds(1.0));                             // allow for some setup time
 
     /** Constant Decalartions *************************************************/
         // When recording, time specifies the number of buffers to record
-    #if ((DEBUG != 0) && ((WRITERX != 0)||(WRITEXCORR != 0)||(WRITEKAL != 0)))
+    #if ((DEBUG != 0) && ((WRITERX != 0)||(WRITEXCORR != 0)||(WRITEKAL != 0))||(WRITETX != 0))
         INT16U write_ctr = 0;
+        INT16U delay_ctr = 0;
+        INT32U write_ctr_offset = 0;
         const INT32U time = DURATION*(usrp_tx->get_tx_rate()/SPB);
+        const INT32U delay_time = DELAY*(usrp_tx->get_tx_rate()/SPB);
     #else
     #endif /* ((DEBUG != 0) && ((WRITERX != 0)||(WRITEXCORR != 0))) */
 
-        // NUMRXBUFFS changes depending on recording thr RX buffer or not
-    #if ((DEBUG != 0) && (WRITERX != 0))
-        #define NUMRXBUFFS time
-    #else
-        #define NUMRXBUFFS NRXBUFFS
-    #endif /* ((DEBUG != 0) && (WRITERX != 0)) */
-
     /** Debugging Variables Initialization ************************************/
+    #if ((DEBUG != 0) && (WRITETX != 0))
+        std::vector<CINT16> tx_sinc_rec(SPB*time);
+        std::vector< FP64 > tx_time_rec(time);
+    #else
+    #endif /* #if ((DEBUG != 0) && (WRITETX != 0)) */
+
+    #if ((DEBUG != 0) && (WRITERX != 0))
+        std::vector<CINT16> rx_sinc_rec(SPB*time);
+        std::vector< FP64 > rx_time_rec(time);
+    #else
+    #endif /* #if ((DEBUG != 0) && (WRITERX != 0)) */
+
     #if ((DEBUG != 0) && (WRITEKAL != 0))
-            // Kalman filter variables
+            // Kalman filter variablespred_error
         std::vector< FP64 > clockoffset_rec(time);      // stores clockoffset
-        std::vector< FP64 > crnt_master_rec(time);      // stores crnt_master
+        std::vector< FP64 > pred_master_rec(time);      // stores pred_master
         std::vector< FP64 > pred_error_rec(time);       // stores pred_error
 
         std::vector< FP64 > time_est_rec(time);         // stores time_est
@@ -129,23 +152,33 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
         std::vector< FP64 > rate_pred_rec(time);        // stores rate_pred
 
         std::vector< FP64 > fdel_rec(time);             // stores fdel
+
+        std::vector<CINT64> exact_max_center_rec(time); // stores center_max
+        std::vector< FP64 > roundtrip_rec(time);        // store roundtrip time
+        std::vector< FP64 > buff_timer_rec(time);   // stores the flag set when previous is used
     #else
     #endif /* #if ((DEBUG != 0) && (WRITEKAL != 0)) */
 
+    #if ((DEBUG != 0) && (WRITEREADME != 0))
+        std::vector< FP64 > define_dat_rec(NUM_DEFINES);
+        std::ofstream read_me_file;
+    #else
+    #endif /* #if ((DEBUG != 0) && (WRITEREADME != 0)) */
+
         // Only compiled when debugging
     #if ((DEBUG != 0) && (WRITEXCORR != 0))
-        std::vector<CINT64> xcorr_write(SPB*time);  // Xcorr variable
+        std::vector<CINT64> xcorr_write(SPB*time);      // Xcorr variable
     #else
     #endif /* #if ((DEBUG != 0) && (WRITEXCORR != 0)) */
 
     /** Variable Declarations *************************************************/
 
         // create sinc pulses, zero, and receive buffers
-    std::vector< CINT16 >   xcorr_sinc(SPB);            // Stores precomputed sinc pulse for cross correlation  (constant)
+    std::vector< CINT64 >   xcorr_sinc(SPB);            // Stores precomputed sinc pulse for cross correlation  (constant)
     std::vector< CINT16 >   tx_sinc(SPB);               // Stores precomputed sinc pulse for transmission
     std::vector< CINT16 >   zero(SPB, (0,0));           // Stores all zeros for Tx
-    std::vector< CINT16 >   rxbuff(NUMRXBUFFS*SPB);     // Circular receive buffer, keeps most recent 3 buffers
-    std::vector< CINT16 *>  rxbuffs(NUMRXBUFFS);        // Vector of pointers to sectons of rx_buff
+    std::vector< CINT16 >   rxbuff(NRXBUFFS*SPB);     // Circular receive buffer, keeps most recent 3 buffers
+    std::vector< CINT16 *>  rxbuffs(NRXBUFFS);        // Vector of pointers to sectons of rx_buff
 
         // Correlation variables
     CINT64 xcorr;                                       // Cross correlation
@@ -159,18 +192,23 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
     FP64 clkrt_ctr          = 0.0;                      // Calculated clockrate (manually set)
 
         // Kalman filter variables
-    FP64  crnt_master       = 0.0;                      // Current time of master
-    FP64  time_est          = 0.0;                      // Time estimate of master
-    FP64  time_pred         = 0.0;                      // Time prediction of master
-    FP64  rate_est          = 1.0;                      // Rate estimate of master
-    FP64  rate_pred         = 1.0;                      // Rate prediction of master
-    FP64  pred_error        = 0.0;                      // Prediction error
-    INT32 buff_timer        = 0;                        // Timer for time between transmitting and receiving a pulse
-    INT32 bt_avg            = 0;                        // Movinga average variable
+    FP64  pred_master        = 0.0;                     // Current time of master
+    FP64  time_est           = 0.0;                     // Time estimate of master
+    FP64  time_pred          = 0.0;                     // Time prediction of master
+    FP64  rate_est           = 1.0;                     // Rate estimate of master
+    FP64  rate_pred          = 1.0;                     // Rate prediction of master
+    FP64  pred_error         = 0.0;                     // Prediction error
+    FP64  pred_error_unfixed = 0.0;
+    FP64  elapsed_time       = 0;
+    FP64  roundtrip          = 0;
+    INT32 buff_timer         = 0;                       // Timer for time between transmitting and receiving a pulse
+    INT32 buff_timer_grab    = 0;
+    INT32 bt_avg             = 0;                       // Moving average variable
+    INT32 current_slave_time = 0;                       // The current time of the slavenode when the calculation starts relative to a transmition
     std::vector< INT32 >  bt_vec(3);                    // Moving average for buff timer
 
-    FP32  k_gain1           = 01.0;                     // Kalman gain 1
-    FP32  k_gain2           = KALGAIN2;                 // Kalman gain 2
+    FP64  k_gain1           = KALGAIN1_START;           // Kalman gain 1
+    FP64  k_gain2           = KALGAIN2_START;           // Kalman gain 2
 
         // Counters
     INT16U ping_ctr         = 0;                        // Counter for transmitting pulses
@@ -180,10 +218,11 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
         // Book keeping
     bool first_calc         = true;                     // First time running calculate code
     bool tx_ping            = true;                     // Transmit ping pulse
+    bool fdel_is_stable     = true;
 
     /** Variable Initializations **********************************************/
         // Initialise rxbuffs (Vector of pointers)
-    for(i = 0; i < NUMRXBUFFS; i++){
+    for(i = 0; i < NRXBUFFS; i++){
         rxbuffs[i] = &rxbuff.front() + SPB * i;
     }
 
@@ -193,20 +232,14 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
         // Generate sinc pulse for cross correlation
     Sinc_Gen_XC(&xcorr_sinc.front(), XCORR_AMP, SPB);
 
-        // Conjugate correlation sinc pulse
-    for (j = 0; j < SPB; j++){
-        xcorr_sinc[j] = std::conj(xcorr_sinc[j]);
-    }
-
         // Generate synchronization and debug sinc pulses
     Sinc_Gen_TX(&tx_sinc.front(), TX_AMP, SPB, 0.0, tx_ping);
 
     /** Debug code for writing sinc pulse *************************************/
         // Write template sinc pulse to file for debug
     #if ((DEBUG != 0) && (WRITESINC != 0))
-        std::cout << "Writing tx and xcorr Sinc to file..." << std::flush;
+        std::cout << "Writing xcorr Sinc to file..." << std::flush;
         writebuff("./xcorr_sinc.dat", &xcorr_sinc.front(), SPB);
-        // writebuff("./tx_sinc.dat", &tx_sinc.front(), SPB);
         std::cout << "done!" << std::endl;
     #else
     #endif /* #if ((DEBUG != 0) && (WRITESINC != 0)) */
@@ -259,6 +292,12 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
         // grab initial block of received samples from USRP with nice long timeout (gets discarded)
     rx_stream->recv(rxbuffs[0], SPB, md_rx, 3.0);
 
+    #if ((DEBUG != 0) && (WRITE_COUNTERS != 0))
+        std::cout << "Delay time set to " << DELAY << " seconds" << std::endl;
+        std::cout << "Write time set to " << DURATION << " seconds" << std::endl;
+    #else
+    #endif /* #if ((DEBUG != 0) && (WRITE_COUNTERS != 0)) */
+
     while(not stop_signal_called){
         /***********************************************************************
          * SEARCHING block - (cross correlating and pulse detection)
@@ -272,6 +311,18 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
             // Grab block of received samples from USRP
         rx_stream->recv(rxbuffs[rxbuff_ctr], SPB, md_rx);
 
+            // Dumps the rxbuffs to a recording buffer for later
+        #if ((DEBUG != 0) && (WRITERX != 0))
+            write_ctr_offset = (write_ctr*SPB);
+
+              // Save tx
+            rx_time_rec[write_ctr] = (usrp_rx->get_time_now()).get_real_secs();
+            for(INT16U n = 0; n < SPB; n++){
+                  rx_sinc_rec[(write_ctr_offset)+n] = rxbuffs[rxbuff_ctr][n];
+            }
+        #else
+        #endif /* #if ((DEBUG != 0) && (WRITERX != 0)) */
+
         /** CROSS CORRELATION, FIND PEAK **************************************/
             // Clear data structure elements
         crnt_max.center = CINT64(0,0);
@@ -284,14 +335,14 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
                 // Cross correlation for circular buffer
             if(rxbuff_ctr == 0){
                 for(j = 0; j < SPB-1-i; j++){
-                    xcorr += rxbuffs[NUMRXBUFFS-1][i+j+1].real() * xcorr_sinc[j];
+                    xcorr += (CINT64)rxbuffs[NRXBUFFS-1][i+j+1].real() * (CINT64)xcorr_sinc[j];
                 }
                 for(j = SPB-1-i; j < SPB; j++){
-                    xcorr += rxbuffs[0][-SPB+1+i+j].real() * xcorr_sinc[j];
+                    xcorr += (CINT64)rxbuffs[0][-SPB+1+i+j].real() * (CINT64)xcorr_sinc[j];
                 }
             }else{
                 for (j = 0; j < SPB; j++) {
-                    xcorr += rxbuffs[rxbuff_ctr-1][i+j+1].real() * xcorr_sinc[j];
+                    xcorr += (CINT64)rxbuffs[rxbuff_ctr-1][i+j+1].real() * (CINT64)xcorr_sinc[j];
                 }
             }
 
@@ -299,7 +350,6 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
             if(std::abs(xcorr.real()) > std::abs(crnt_max.center.real())){
                 crnt_max.center = xcorr;                    // Save crnt_max value
                 crnt_max.center_pos = i;                    // Save crnt_max position
-
             }else{}
 
             /** Save buffers if enabled by defines ****************************/
@@ -309,12 +359,10 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
             #else
             #endif /* #if ((DEBUG != 0) && (WRITEXCORR != 0)) */
         }
-
             // Trigger calculation block after extra buffer
         if (threshbroken == true){
             calculate = true;           // Enable calculation of peak position
             threshbroken = false;       // Clear flag
-
             // Receive and correlate one extra buffer to ensure peak is caught
         }else if (std::abs(crnt_max.center.real()) >= THRESHOLD){
             threshbroken = true;        // Set flag
@@ -322,7 +370,7 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
 
             // Increment rx buffer counter
         rxbuff_ctr++;
-        if (rxbuff_ctr >= NUMRXBUFFS) {
+        if (rxbuff_ctr >= NRXBUFFS) {
             rxbuff_ctr = 0;
         }else{}
 
@@ -330,58 +378,103 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
          * CALCULATING block - Finds delay and synchronizes
          **********************************************************************/
         if(calculate == true){
-            std::cout << boost::format("Ping RX Time %10.5f") % (md_rx.time_spec.get_full_secs() + md_rx.time_spec.get_frac_secs()) << std::endl; // << std::endl;
+                // Print ping times to terminal
+            #if (PING_TIMES != 0)
+                std::cout << boost::format("Ping RX Time %10.5f") % (md_rx.time_spec.get_full_secs() + md_rx.time_spec.get_frac_secs()) << std::endl;
+            #else
+            #endif /* #if ((DEBUG != 0) && (PING_TIMES != 0)) */
+
+                // Update the current slave time
+            current_slave_time = (buff_timer * SPB);
+            buff_timer_grab = buff_timer;
 
                 // Did previous buffer have largest peak?
             if(std::abs(prev_max.center.real()) > std::abs(crnt_max.center.real())){        // YES
                 exact_max = prev_max;
                 buff_timer--;           // Correct timer
-
             }else{                                                                          // NO
                 exact_max = crnt_max;
             }
 
             /** Delay estimator (atan2 fractional delay & Kalman filter) ******/
 
-                // Calculate fractional offset
-            fdel = std::atan2(exact_max.center.imag(), exact_max.center.real())/CBW;
-            std::cout << "fdel " << fdel << std::endl;
+                // Negate center value if real value is negative
+            if(exact_max.center.real() < 0){
+                std::cout << "Center value was negative, had to flip." << std::endl;
+                std::cout << k << std::endl;
+                k++;
+                exact_max.center = CINT64(-1,0)*exact_max.center;
+            }else{}
 
-                // Actual roundtrip time is buff_timer * SPB + (exact_max.center_pos - 999) + fdel.
-            if(buff_timer & 1){
-                clockoffset = (exact_max.center_pos+fdel+SPB+1)/2;
-            }else{
-                clockoffset = (exact_max.center_pos+fdel+1)/2;
-            }
+                // Calculate fractional offset
+            fdel = FDEL_SCALE*(std::atan2((FP64)exact_max.center.imag(), (FP64)exact_max.center.real())/(FP64)(CBW*PI));
+
+                // Calculated using the roundtrip time
+
+            clockoffset = (((FP64)((buff_timer - 1) * SPB) + (FP64)((FP64)exact_max.center_pos - SPB) + fdel)/2) + 1;
+
+            elapsed_time = (FP64)current_slave_time - clockoffset;
+            //std::cout << current_slave_time << std::endl;
+            //std::cout << (FP64)(((buff_timer - 1) * SPB) + (FP64)((FP64)exact_max.center_pos - SPB) + fdel) << std::endl;
+
+                // Print Roundtrip time and Calculated Clockoffset to terminal
+            #if (OFFSET_CALC != 0)
+                std::cout << boost::format("Roundtrip Time: %10.2f") % (((FP64)((buff_timer - 1) * SPB) + (FP64)((FP64)exact_max.center_pos - SPB) + fdel)) << std::flush;
+                std::cout << boost::format("\tClockoffset: %10.2f") % (clockoffset) << std::endl;
+            #else
+            #endif /* #if (OFFSET_CALC != 0) */
 
                 // Moving average of buff timer (Prevents glitching if pulse is lost)
+                // Useful for the start of the code while device calibrates
             bt_vec.insert(bt_vec.end(),buff_timer);
             bt_vec.erase(bt_vec.begin());
             bt_avg = std::accumulate(bt_vec.begin(),bt_vec.end(),0)/bt_vec.size();
 
-                // Only update Kalman filter when buff_timer is consistent
-            if(bt_avg == buff_timer){
-                    // Kalman Filter
-                crnt_master = (clockoffset) * rate_est;             // Calculate current time at master
-                pred_error  = crnt_master - time_pred;              // Calculate error of prediction
+                //Errors trickle through imperfect xcorr calculation, arctan is
+            if(std::abs(fdel) > FDEL_THRESH){
+              fdel_is_stable = false;
+            }else{
+              fdel_is_stable = true;
+            }
 
-                    // Make sure pred_error is within +/- spb/2
+                // Only update Kalman filter when buff_timer is consistent
+            if((bt_avg == buff_timer) && (fdel_is_stable)){
+                    // Kalman Filter
+
+                pred_master = -elapsed_time - (FP64)((TXDELAY + 1)*SPB);    // Calculate current time at master
+
+
+                    // Wrap the pred_master to be within +/- SPB/2
+                while(pred_master<=-(SPB/2)){
+                    pred_master = pred_master+(FP64)(SPB*rate_est);
+                }
+                while(pred_master>(SPB/2)){
+                    pred_master = pred_master-(FP64)(SPB*rate_est);
+                }
+
+                pred_error  = pred_master - time_pred;              // Calculate error of prediction
+
+                    // Make sure pred_error is within +/- SPB/2
                 while(pred_error >= (SPB/2)){
-                    pred_error -= SPB;
+                    std::cout << pred_error << " pred_error wrapped " << std::endl;
+                    pred_error -= SPB*rate_est;
                 }
                 while(pred_error < -(SPB/2)){
-                    pred_error += SPB;
+                    std::cout << pred_error << " pred_error wrapped " << std::endl;
+                    pred_error += SPB*rate_est;
                 }
 
                     // Update Estimates
                 time_est  = time_pred + k_gain1 * pred_error;       // Estimate time of master
                 rate_est  = rate_pred + k_gain2 * pred_error;       // Estimate clock rate of master
 
-                    // Slowly decrease kalman gain
-                if(k_gain1 > KALGAIN1){
-                    k_gain1 = k_gain1*0.999;
-                }else{}
-                k_gain2 = k_gain2*0.999;
+                    // Slowly decrease kalman gain to converge to KALGAINX_STOP
+                // if(k_gain1 > KALGAIN1_STOP){
+                //    k_gain1 = k_gain1*0.99;
+                // }else{}
+                // if(k_gain2 > KALGAIN2_STOP){
+                //    k_gain2 = k_gain2*0.9;
+                // }else{}
 
                     // On first calc run only, to keep rate_est from straying too far from 1
                 if(first_calc){
@@ -390,19 +483,13 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
                 }else{}
 
                     // Update Predictions
-                time_pred = time_est + (rate_est - 1) * SPB;        // Predict time of master
                 rate_pred = rate_est;                               // Predict rate of master
 
             }else{
                     // If buff_timer is unstable, use predicted values for update
                 time_est  = time_pred;                              // Update estimate with prediction
                 rate_est  = rate_pred;                              // Update rate estimate with prediction
-                time_pred = time_est + (rate_est - 1) * SPB;        // Generate new time prediction based on rate_est
             }
-
-                // Display computed delay on terminal
-            // std::cout << boost::format("Computed Delay %10.5f") % (time_est + TXDELAY * (rate_est - 1) * SPB + SPB/2 + 347.85) << std::endl << std::endl;
-            std::cout << boost::format("cdel %f") % (exact_max.center_pos) << std::endl << std::endl;
 
                 // Exit calculating mode
             calculate = false;
@@ -411,8 +498,20 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
         }else{
             time_est  = time_pred;                                  // Update estimate with prediction
             rate_est  = rate_pred;                                  // Update rate estimate with prediction
-            time_pred = time_est + (rate_est - 1) * SPB;            // Generate new time prediction based on rate_est
+        } /********** if(calculate == true) *****************/
+
+            // wrap time_est if need be
+        while(time_est >= (SPB/2)){
+            std::cout << time_est << " time_est wrapped " << std::endl;
+            time_est -= SPB*rate_est;
         }
+        while(time_est < -(SPB/2)){
+            std::cout << time_est << " time_est wrapped " << std::endl;
+            time_est += SPB*rate_est;
+        }
+
+        time_pred = time_est + (rate_est - 1) * (FP64)SPB;        // Predict time of master
+
 
         /***********************************************************************
          * TRANSMITTING block - Transmits debug signal and "ping"
@@ -429,29 +528,35 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
 
             ping_ctr = 0;                       // Reset ping counter
 
-                // Display transmission detail on terminal
-            std::cout << boost::format("Ping TX Time %10.5f") % (md_tx.time_spec.get_full_secs() + md_tx.time_spec.get_frac_secs()) << std::endl;
         } else {
             tx_ping = false;                    // Clear ping flag
             ping_ctr++;                         // Increment counter
+
         }
 
-            // Generate appropriately delayed sinc pulse
-        // clkrt_ctr = clkrt_ctr + CLKRT;   // Experimentally derived offset, produces flat segments of 20 samples
-        // Sinc_Gen_TX(&tx_sinc.front(), TX_AMP, SPB,  clkrt_ctr);
-
             // Generate delayed pulse
-        Sinc_Gen_TX(&tx_sinc.front(), TX_AMP, SPB,  time_est + TXDELAY * (rate_est - 1) * SPB + usrp_tx->get_tx_rate()*HW_CAL, tx_ping);
-        // Sinc_Gen_TX(&tx_sinc.front(), TX_AMP, SPB, clockoffset+usrp_tx->get_tx_rate()*HW_CAL, tx_ping);
+        Sinc_Gen_TX(&tx_sinc.front(), TX_AMP, SPB, time_est*rate_est + (SPB/2)*rate_est - (SPB/2) + HW_CAL, tx_ping);
 
             // Transmit both buffers
         tx_stream->send(&tx_sinc.front(), SPB, md_tx);
         md_tx.start_of_burst = false;
 
+            // Move trasmitted buffers into a recording buffer
+        #if ((DEBUG != 0) && (WRITETX != 0))
+            write_ctr_offset = (write_ctr*SPB);
+
+            tx_time_rec[write_ctr] = (usrp_rx->get_time_now()).get_real_secs();
+            for(INT16U i = 0; i < SPB; i++){
+                tx_sinc_rec[(write_ctr_offset)+i] = tx_sinc[i];
+            }
+        #else
+        #endif /* #if ((DEBUG != 0) && (WRITETX != 0))
+
+
         /** Copy Kalman variables *********************************************/
         #if ((DEBUG != 0) && (WRITEKAL != 0))
             clockoffset_rec[write_ctr]  =   clockoffset;    // stores clockoffset
-            crnt_master_rec[write_ctr]  =   crnt_master;    // stores crnt_master
+            pred_master_rec[write_ctr]  =   pred_master;    // stores pred_master
             pred_error_rec[write_ctr]   =   pred_error;     // stores pred_error
 
             time_est_rec[write_ctr]     =   time_est;       // stores time_est
@@ -460,35 +565,65 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
             rate_pred_rec[write_ctr]    =   rate_pred;      // stores rate_pred
 
             fdel_rec[write_ctr]         =   fdel;           // stores fdel
+            roundtrip_rec[write_ctr]    =   roundtrip; // store roundtrip time
+
+            exact_max_center_rec[write_ctr]   =   exact_max.center;
+            buff_timer_rec[write_ctr]   =   buff_timer_grab;
         #else
         #endif /* #if ((DEBUG != 0) && (WRITEKAL != 0)) */
 
         /** Exit program to write buffers  ************************************/
-        #if ((DEBUG != 0) && ((WRITERX != 0)||(WRITEXCORR != 0)||(WRITEKAL != 0)))
-            if(write_ctr >= time-1){
-                break;
+        #if ((DEBUG != 0) && ((WRITERX != 0)||(WRITEXCORR != 0)||(WRITEKAL != 0)||(WRITESINC != 0)||(WRITETX != 0)))
+            if(delay_ctr >= delay_time){
+                if(write_ctr >= time-1){
+                    break;
+                }else{
+                    write_ctr++;
+                }
             }else{
-                write_ctr++;
+                delay_ctr++;
             }
+                // Print Roundtrip time and Calculated Clockoffset to terminal
+            #if (WRITE_COUNTERS != 0)
+                if(delay_ctr >= delay_time){
+                    std::cout << boost::format("Write: %10.2f\r") % (write_ctr/(usrp_tx->get_tx_rate()/SPB)) << std::flush;
+                }else{
+                    std::cout << boost::format("Delay: %10.2f\r") % (delay_ctr/(usrp_tx->get_tx_rate()/SPB)) << std::flush;
+                }
+            #else
+            #endif /* #if (WRITE_COUNTERS != 0) */
         #else
-        #endif /* #if ((DEBUG != 0) && ((WRITERX != 0)||(WRITEXCORR != 0)||(WRITEKAL != 0))) */
+        #endif /* #if ((DEBUG != 0) && ((WRITERX != 0)||(WRITEXCORR != 0)||(WRITEKAL != 0)||(WRITESINC != 0)||(WRITETX != 0))) */
     }   /** while(not stop_signal_called) *************************************/
 
         // Write template sinc pulse to file for debug
-    #if ((DEBUG != 0) && (WRITESINC != 0))
-        std::cout << "Writing tx_sinc to file..." << std::flush;
-        writebuff("./tx_sinc.dat", &tx_sinc.front(), SPB);
+
+        /** Write buffers *****************************************************/
+
+        // Write tx buffer to file
+    #if ((DEBUG != 0) && (WRITETX != 0))
+        std::cout << "Writing tx buffer to file..." << std::flush;
+        writebuff("./tx.dat", &tx_sinc_rec[0], SPB*write_ctr);
+        std::cout << "done!" << std::endl;
+
+        std::cout << "Writing tx_time to file..." << std::flush;
+        writebuff("./tx_time.dat", &tx_time_rec[0], write_ctr);
         std::cout << "done!" << std::endl;
     #else
-    #endif /* #if ((DEBUG != 0) && (WRITESINC != 0)) */
+    #endif /* #if ((DEBUG != 0) && (WRITETX != 0)) */
 
-    /** Write buffers *****************************************************/
+      // Write rx buffer to file
     #if ((DEBUG != 0) && (WRITERX != 0))
         std::cout << "Writing rx buffer to file..." << std::flush;
-        writebuff("./rx.dat", rxbuffs[0], SPB*write_ctr);
+        writebuff("./rx.dat", &rx_sinc_rec[0], SPB*write_ctr);
+        std::cout << "done!" << std::endl;
+
+        std::cout << "Writing rx_time buffer to file..." << std::flush;
+        writebuff("./rx_time.dat", &rx_time_rec[0], write_ctr);
         std::cout << "done!" << std::endl;
     #else
-    #endif /* #if ((DEBUG != 0) && (WRITEXCORR != 0)) */
+    #endif /* #if ((DEBUG != 0) && (WRITERX != 0)) */
+
 
     #if ((DEBUG != 0) && (WRITEXCORR != 0))
         std::cout << "Writing cross correlation to file..." << std::flush;
@@ -502,8 +637,8 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
         writebuff("./clockoffset.dat", &clockoffset_rec.front(), write_ctr);
         std::cout << "done!" << std::endl;
 
-        std::cout << "Writing crnt_master to file..." << std::flush;
-        writebuff("./crnt_master.dat", &crnt_master_rec.front(), write_ctr);
+        std::cout << "Writing pred_master to file..." << std::flush;
+        writebuff("./pred_master.dat", &pred_master_rec.front(), write_ctr);
         std::cout << "done!" << std::endl;
 
         std::cout << "Writing pred_error to file..." << std::flush;
@@ -528,14 +663,116 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
         writebuff("./rate_pred.dat", &rate_pred_rec.front(), write_ctr);
         std::cout << "done!" << std::endl << std::endl;
 
+        std::cout << "Writing roundtrip to file..." << std::flush;
+        writebuff("./roundtrip.dat", &roundtrip_rec.front(), write_ctr);
+        std::cout << "done!" << std::endl << std::endl;
+
+        std::cout << "Writing buff_timer to file..." << std::flush;
+        writebuff("./buff_timer.dat", &buff_timer_rec.front(), write_ctr);
+        std::cout << "done!" << std::endl << std::endl;
 
 
         std::cout << "Writing fdel to file..." << std::flush;
         writebuff("./fdel.dat", &fdel_rec.front(), write_ctr);
         std::cout << "done!" << std::endl;
+
+        std::cout << "Writing exact_max_center to file..." << std::flush;
+        writebuff("./exact_max_center.dat", &exact_max_center_rec.front(), write_ctr);
+        std::cout << "done!" << std::endl;
     #else
     #endif /* #if ((DEBUG != 0) && (WRITEKAL != 0)) */
 
+    /** Write Define Values to File ***************************************/
+    #if ((DEBUG != 0) && (WRITEREADME != 0))
+        read_me_file.open("README.txt");
+
+        read_me_file << STRINGIFY(SAMPRATE)         << "\t" << SAMPRATE << std::endl;
+        define_dat_rec[0] =                         (FP64) SAMPRATE;
+
+        read_me_file << STRINGIFY(CARRIERFREQ)      << "\t" << CARRIERFREQ << std::endl;
+        define_dat_rec[1] =                         (FP64) CARRIERFREQ;
+
+        read_me_file << STRINGIFY(CLOCKRATE)        << "\t" << CLOCKRATE << std::endl;
+        define_dat_rec[2] =                         (FP64) CLOCKRATE;
+
+        read_me_file << STRINGIFY(HW_CAL)           << "\t" << HW_CAL << std::endl;
+        define_dat_rec[3] =                         (FP64) HW_CAL;
+
+
+        read_me_file << STRINGIFY(KALGAIN1_START)   << "\t" << KALGAIN1_START << std::endl;
+        define_dat_rec[4] =                         (FP64) KALGAIN1_START;
+
+        read_me_file << STRINGIFY(KALGAIN2_START)   << "\t" << KALGAIN2_START << std::endl;
+        define_dat_rec[5] =                         (FP64) KALGAIN2_START;
+
+        read_me_file << STRINGIFY(KALGAIN1_STOP)    << "\t" << KALGAIN1_STOP << std::endl;
+        define_dat_rec[6] =                         (FP64) KALGAIN1_STOP;
+
+        read_me_file << STRINGIFY(KALGAIN2_STOP)    << "\t" << KALGAIN2_STOP << std::endl;
+        define_dat_rec[7] =                         (FP64) KALGAIN2_STOP;
+
+        read_me_file << STRINGIFY(KALGAIN_UPDATE)   << "\t" << KALGAIN_UPDATE << std::endl;
+        define_dat_rec[8] =                         (FP64) KALGAIN_UPDATE;
+
+        read_me_file << STRINGIFY(RATE_DIFF)        << "\t" << RATE_DIFF << std::endl;
+        define_dat_rec[9] =                         (FP64) RATE_DIFF;
+
+        read_me_file << STRINGIFY(RATE_SEED)        << "\t" << RATE_SEED << std::endl;
+        define_dat_rec[10] =                        (FP64) RATE_SEED;
+
+        read_me_file << STRINGIFY(CLKRT)            << "\t" << CLKRT << std::endl;
+        define_dat_rec[11] =                        (FP64) CLKRT;
+
+
+        read_me_file << STRINGIFY(SPB)              << "\t" << SPB << std::endl;
+        define_dat_rec[12] =                        (FP64) SPB;
+
+        read_me_file << STRINGIFY(NRXBUFFS)         << "\t" << NRXBUFFS << std::endl;
+        define_dat_rec[13] =                        (FP64) NRXBUFFS;
+
+        read_me_file << STRINGIFY(TXDELAY)          << "\t" << TXDELAY << std::endl;
+        define_dat_rec[14] =                        (FP64) TXDELAY;
+
+        read_me_file << STRINGIFY(CBW)              << "\t" << CBW << std::endl;
+        define_dat_rec[15] =                        (FP64) CBW;
+
+        read_me_file << STRINGIFY(BW)               << "\t" << BW << std::endl;
+        define_dat_rec[16] =                        (FP64) BW;
+
+        read_me_file << STRINGIFY(SYNC_PERIOD)      << "\t" << SYNC_PERIOD << std::endl;
+        define_dat_rec[17] =                        (FP64) SYNC_PERIOD;
+
+        read_me_file << STRINGIFY(SINC_PRECISION)   << "\t" << SINC_PRECISION << std::endl;
+        define_dat_rec[18] =                        (FP64) SINC_PRECISION;
+
+
+        read_me_file << STRINGIFY(XCORR_AMP)        << "\t" << XCORR_AMP << std::endl;
+        define_dat_rec[19] =                        (FP64) XCORR_AMP;
+
+        read_me_file << STRINGIFY(TX_AMP)           << "\t" << TX_AMP << std::endl;
+        define_dat_rec[20] =                        (FP64) TX_AMP;
+
+        read_me_file << STRINGIFY(THRESHOLD)        << "\t" << THRESHOLD << std::endl;
+        define_dat_rec[21] =                        (FP64) THRESHOLD;
+
+        read_me_file << STRINGIFY(XCORR_SHIFT)      << "\t" << XCORR_SHIFT << std::endl;
+        define_dat_rec[22] =                        (FP64) XCORR_SHIFT;
+
+
+        read_me_file << STRINGIFY(FDEL_SCALE)       << "\t" << FDEL_SCALE << std::endl;
+        define_dat_rec[23] =                        (FP64) FDEL_SCALE;
+
+        read_me_file << STRINGIFY(FDEL_THRESH)      << "\t" << FDEL_THRESH << std::endl;
+        define_dat_rec[24] =                        (FP64) FDEL_THRESH;
+
+        read_me_file.close();
+
+        std::cout << "Writing define_dat_rec to file..." << std::flush;
+        writebuff("./define_dat_rec.dat", &define_dat_rec.front(), NUM_DEFINES);
+        std::cout << "done!" << std::endl;
+
+    #else
+    #endif /* #if ((DEBUG != 0) && (WRITEREADME != 0)) */
 
         // send a mini EOB packet
     md_tx.end_of_burst = true;

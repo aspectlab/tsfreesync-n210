@@ -12,16 +12,18 @@
     // Compilation Parameters
 #define DEBUG           0                       // Debug (binary) if 1, debug code compiled
 
-#define DURATION        60                      // Duration of recording (s)
+#define DURATION        15                      // Duration of recording (s)
 
-#define WRITESINC       0                       // Write template sinc pulses (binary)
+#define WRITESINC       1                       // Write template sinc pulses (binary)
 
 #define WRITERX         1                       // Enable writing RX buffer to file (binary)
+
+#define WRITETX         1                       // Write transmission buffer to file (binary)
 
 #define WRITEXCORR      1                       // Write normalized cross correlation to file (binary)
 
     // Radio Parameters
-#define SAMPRATE        150e3                   // Sampling rate (Hz)
+#define SAMPRATE        250e3                   // Sampling rate (Hz)
 #define CARRIERFREQ     0                       // Carrier frequency (Hz)
 #define CLOCKRATE       30.0e6                  // Clock rate (Hz)
 #define USRPIP          "addr=192.168.10.11"    // Ip string of USRP
@@ -29,9 +31,10 @@
     // Transmission Parameters
 #define SPB             1000                    // Samples Per Buffer
 #define NRXBUFFS        3                       // Number of receive buffers (circular)
-#define TXDELAY         2                       // Buffers in the future that we schedule transmissions (must be even)
-#define BW              0.45                    // Normalized bandwidth of sinc pulse (1 --> Nyquist)
-#define CBW             0.5                     // Normalized freq offset of sinc pulse (1 --> Nyquist)
+#define TXDELAY         4                       // Buffers in the future that we schedule transmissions (must be even)
+#define CBW             0.8   //0.5                     // Normalized freq offset of sinc pulse (1 --> Nyquist)
+#define BW              0.02    //CBW*0.9                 // Normalized bandwidth of sinc pulse (1 --> Nyquist)
+
 #define DEBUG_PERIOD    1                       // Debug Period (# of buffers)
 
 #define SINC_PRECISION  10000                   // Precision of sinc pulse delays relative to FS
@@ -42,7 +45,7 @@
 #define TX_AMP          0x7FFF                  // Peak value of sinc pulse generated for debug channel (max 32768)
 
 #define THRESHOLD       5e3                     // Threshold of cross correlation pulse detection
-#define FLIP_SCALING    50                      // scale factor used when re-sending flipped signals... depends heavily on choice of TXGAIN and RXGAIN
+#define FLIP_SCALING    40                      // scale factor used when re-sending flipped signals...
 
 typedef enum {SEARCHING, FLIP2, FLIP1, FLIP0, TRANSMIT} STATES;
 
@@ -64,12 +67,13 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
     usrp_tx->set_master_clock_rate(CLOCKRATE);                                              // set clock rate
     usrp_tx->set_clock_source(std::string("internal"));                                     // lock mboard clocks
     usrp_tx->set_tx_subdev_spec(std::string("A:BA"));                                       // select the subdevice (2-channel mode)
-    usrp_tx->set_tx_rate(SAMPRATE);                                                         // set the sample rate
+    usrp_tx->set_tx_rate(SAMPRATE);
+    std::cout << boost::format("Actual TX Rate: %f Msps...") % (usrp_tx->get_tx_rate()/1e6) << std::endl;
+                                                           // set the sample rate
     uhd::tune_request_t tune_request(CARRIERFREQ);                                          // validate tune request
     usrp_tx->set_tx_freq(tune_request,0);                                                   // set the center frequency of chan0
     usrp_tx->set_tx_antenna("TX/RX",0);                                                     // set the antenna of chan0
-    boost::this_thread::sleep(boost::posix_time::seconds(1.0));                             // allow for some setup time
-
+    boost::this_thread::sleep(boost::posix_time::seconds(1.0));
         // create a USRP RX device
     uhd::usrp::multi_usrp::sptr usrp_rx = uhd::usrp::multi_usrp::make(std::string(USRPIP));
     usrp_rx->set_master_clock_rate(CLOCKRATE);                                              // set clock rate
@@ -97,13 +101,24 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
     #endif /* ((DEBUG != 0) && (WRITERX != 0)) */
 
         // create sinc, and receive buffers
-    std::vector< CINT16 >   xcorr_sinc(SPB);            // stores precomputed sinc pulse for cross correlation
+    std::vector< CINT64 >   xcorr_sinc(SPB);            // stores precomputed sinc pulse for cross correlation
     std::vector< CINT16 >   txbuff(4*SPB);              // stores flipped received signals for Tx
     std::vector< CINT16 *>  txbuffs(4);                 // stores flipped received signals for Tx
     std::vector< CINT16 >   rxbuff(NUMRXBUFFS*SPB);     // Circular receive buffer, keeps most recent 3 buffers
     std::vector< CINT16 *>  rxbuffs(NUMRXBUFFS);        // Vector of pointers to sectons of rx_buff
+    //std::vector< CINT16 >   tx_buff_rec(time*SPB);
+
+
 
         // Only compiled when debugging
+
+    #if ((DEBUG != 0) && (WRITETX != 0))
+        INT32U write_ctr_offset = 0;
+        INT16U tx_write_ctr = 0;
+        std::vector<CINT16> tx_sinc_rec(SPB*time);      // tx recording buffer variable
+    #else
+    #endif /* #if ((DEBUG != 0) && (WRITETX != 0)) */
+
     #if ((DEBUG != 0) && (WRITEXCORR != 0))
         std::vector<CINT64> xcorr_write(SPB*time);      // Xcorr variable
     #else
@@ -135,10 +150,10 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
         // Generate sinc pulse for cross correlation
     Sinc_Gen_XC(&xcorr_sinc.front(), XCORR_AMP, SPB);
 
-        // Conjugate correlation sinc pulse
-    for (j = 0; j < SPB; j++){
-        xcorr_sinc[j] = std::conj(xcorr_sinc[j]);
-    }
+    //     // Conjugate correlation sinc pulse
+    // for (j = 0; j < SPB; j++){
+    //     xcorr_sinc[j] = std::conj(xcorr_sinc[j]);
+    // }
 
         // Initialise rxbuffs (Vector of pointers)
     for(i = 0; i < NUMRXBUFFS; i++){
@@ -255,8 +270,8 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
         }
             // Trigger calculation block after extra buffer
         if ((xcorr_max.real() >= THRESHOLD)&&(state == SEARCHING)){
-            std::cout << "ps " << peak_pos << std::endl;
-            std::cout << boost::format("Pulse detected at time: %15.8f sec") % (md_rx.time_spec.get_real_secs()) << std::endl << std::endl;
+            //std::cout << "ps " << peak_pos << std::endl;
+            //std::cout << boost::format("Pulse detected at time: %15.8f sec") % (md_rx.time_spec.get_real_secs()) << std::endl << std::endl;
 
                 // Compute which rx buffer is the previously recorded buffer
             if(rxbuff_ctr - 1 == -1){
@@ -279,7 +294,20 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
             state = FLIP0;
         }else{}
 
-            // When state is transmit, send flipped buffers
+        //md_tx.time_spec = md_rx.time_spec + uhd::time_spec_t((TXDELAY+1)*(SPB)/usrp_tx->get_tx_rate());
+        md_tx.time_spec = md_rx.time_spec + uhd::time_spec_t((TXDELAY)*(SPB)/usrp_tx->get_tx_rate());
+        tx_stream->send(txbuffs[tx_ctr], SPB, md_tx);
+
+        #if ((DEBUG != 0) && (WRITETX != 0))
+            write_ctr_offset = (write_ctr*SPB);
+            //std::cout << write_ctr_offset << std::endl;
+            for(INT16U i = 0; i < SPB; i++){
+                tx_sinc_rec[(write_ctr_offset)+i] = *(txbuffs[tx_ctr] + i);
+            }
+        #else
+        #endif /* #if ((DEBUG != 0) && (WRITETX != 0)) */
+
+        // When state is transmit, send flipped buffers
         if(state == TRANSMIT){
             tx_ctr++;
                 // After third buffer is queued, exit TRANSMIT state
@@ -289,10 +317,9 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
             }else{}
         }else{}
 
-        md_tx.time_spec = md_rx.time_spec + uhd::time_spec_t((TXDELAY+1)*(SPB)/usrp_tx->get_tx_rate());
-
             // transmit both buffers
-        tx_stream->send(txbuffs[tx_ctr], SPB, md_tx);
+
+
         md_tx.start_of_burst = false;
 
             // increment circular receive buffer counter
@@ -324,6 +351,11 @@ int UHD_SAFE_MAIN(int argc, char *argv[]){
         std::cout << std::endl;
         std::cout << "Writing rx buffer to file..." << std::endl;
         writebuff("./rx.dat", rxbuffs[0], SPB*write_ctr);
+        std::cout << "done!" << std::endl;
+
+        std::cout << std::endl;
+        std::cout << "Writing tx buffer to file..." << std::endl;
+        writebuff("./tx.dat", &tx_sinc_rec[0], SPB*write_ctr);
         std::cout << "done!" << std::endl;
     #else
     #endif /* #if ((DEBUG != 0) && (WRITEXCORR != 0)) */

@@ -8,7 +8,7 @@ set(BOOST_REQUIRED_COMPONENTS
     system
     thread
 )
-	
+
 find_package(Boost "1.46" REQUIRED ${BOOST_REQUIRED_COMPONENTS})
 find_package(UHD "3.9.0" REQUIRED)
 
@@ -33,6 +33,6 @@ add_executable(slavenode slavenode.cpp ${RESOURCES})
 
 SET(CMAKE_BUILD_TYPE "RELEASE")
 
-SET (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
+SET (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -mavx2")
 
 target_link_libraries(slavenode ${UHD_LIBRARIES} ${Boost_LIBRARIES})

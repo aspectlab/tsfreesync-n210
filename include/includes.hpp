@@ -19,6 +19,7 @@
  ******************************************************************************/
 #include "types.hpp"                        // Master type definition file
 #include <iostream>                         // Input/Output to terminal
+#include <fstream>                          // File input and output
 #include <csignal>                          // Signal handlers
 #include <cmath>                            // Mathematical funcitons
 #include <math.h>                           // Math
@@ -45,5 +46,14 @@
 #include "sinc.hpp"                         // Sinc pulse generator
 #include "writebuff.hpp"                    // Writes buffer to file
 #include "checklo.hpp"                      // Checks LO Lock status
+//#include "xcorr.hpp"                        // Computes cross-correlation on GPU
+
+/*******************************************************************************
+ * CUDA Includes
+ ******************************************************************************/
+// #include <thrust/host_vector.h>
+// #include <thrust/device_vector.h>
+// #include <thrust/inner_product.h>
+// #include <thrust/execution_policy.h>
 
 #endif /* ifndef INCLUDES_HPP */

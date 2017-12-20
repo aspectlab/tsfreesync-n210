@@ -3,7 +3,7 @@ Timestamp Free Synchronization for the USRP N210
 
 Written by:
 
-M.Overdick, J.E.Canfield, A.G.Klein
+D.Kowalski, T.Christman, M.Overdick, J.E.Canfield, A.G.Klein
 #####################################################################
 
 This is a simple instruction file on how to build this project.
@@ -30,14 +30,9 @@ MasterNode:
 SlaveNode:
     The slavenode sends "pings" to the masternode constantly, it uses the time between transmitting and receiving a "ping" to determine the phase of the clock on the masternode, and then adjusts its own clock accordingly.
     
-RXNode*:
+RXNode:
     RXNode is for recording two channels for a configurable amount of time. After the recording is completed, the files are saved to a *.dat file for analysis in applications such as Octave and MATLAB.
     
-TXNode*:
+TXNode:
     TXNode is for transmitting pulses on two channels indefinitely. This program is intended for diagnostics of the USRP hardware to test the phase difference between TX channels on the device and RX channels on a recording device such as the RXNode. 
-	
 
-
-
-
-*THIS IS A COPY OF THE E310 CODE AND HAS NOT YET BEEN PORTED TO THE N210

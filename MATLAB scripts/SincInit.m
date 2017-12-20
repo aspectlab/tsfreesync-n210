@@ -1,10 +1,10 @@
-function [ OS_table ] = SincInit( bw, cbw, spb, ratio)
-% OS_table = SincInit(bw,cbw,spb,ratio)
+function [ OS_table ] = SincInit( sbw, cbw, spb, ratio)
+% OS_table = SincInit(sbw,cbw,spb,ratio)
 % This script generates an oversampled Sinc pulse
 % Outputs :
 %   OS_table, the oversampled sinc pulse
 % Inputs :
-%   bw, normalized bandwidth of the pulse
+%   sbw, normalized bandwidth of the pulse
 %   cbw, normalized carrier bandwidth of the pulse
 %   spb, number of samples per buffer in the downsampled version(usually
 %   1000)
@@ -19,19 +19,25 @@ SCALAR = 32767;
 len = spb*ratio;   % length of the oversampled pulse
 
 w0  = cbw*pi;   % w0 controls frequency shift
-eta = bw*pi;    % eta controls BW of sinc pulse
+eta = sbw*pi;    % eta controls BW of sinc pulse
+% cbw = .8 sbw = .05 typical
+
 
 % Init
 OS_table = zeros(1,floor(len));
 
 % Calculate Pulse
-for j = 0:len-1
-    i = j/ratio - spb/2;
+% l > samples in oversampled domain
+% n > samples at the receiver (all nodes are receivers)
+for k = 0:len-1
+    l = k/ratio - spb/2;
     
-    if (i ~= 0)
-        OS_table(j+STU) = complex(SCALAR * sin(eta*i) / (eta*i) * cos(w0*i),SCALAR * sin(eta*i) / (eta*i) * sin(w0*i));
+    if (l ~= 0)
+        OS_table(k+STU) = complex(...
+            SCALAR * sin(eta*l) / (eta*l) * cos(w0*l),...
+            SCALAR * sin(eta*l) / (eta*l) * sin(w0*l));
     else
-        OS_table(j+STU) = complex(SCALAR, 0.0);
+        OS_table(k+STU) = complex(SCALAR, 0.0);
     end
 end
 

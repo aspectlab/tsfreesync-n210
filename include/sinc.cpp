@@ -19,7 +19,10 @@
 extern void Sinc_Init(FP32 bw, FP32 cbw, INT32U spb, INT16U ratio);
 
     // Creates template sinc pulse for cross correlation
-void Sinc_Gen_XC(CINT16 * table, INT16 ampl, INT16U spb);
+void Sinc_Gen_XC(CINT64 * table, INT64 ampl, INT16U spb);
+
+    // Creates template sinc pulse for cross correlation with Cuda
+void Cuda_Sinc_Gen_XC(FP32 * table_real, FP32 * table_imag, INT64 ampl, INT16U spb);
 
     // Undersamples and creates centered pulse on I channel and a delayed pulse
     // on Q channel.
@@ -54,7 +57,8 @@ void Sinc_Init(FP32 bw, FP32 cbw, INT32U spb, INT16U ratio){
      INT32U length  =   0;          // The length (n samples) of sinc pulse
      FP32   w0      =   0;          // Normalized bandwidth of carrier
      FP32   eta     =   0;          // Normalized bandwidth of sinc pulse
-     INT64  j, i;                   // Counter
+     INT64  j;                      // Counter
+     FP32   i;                      // Another counter
 
      Sinc_Ratio = ratio;            // Save ratio for external access
 
@@ -70,7 +74,7 @@ void Sinc_Init(FP32 bw, FP32 cbw, INT32U spb, INT16U ratio){
         eta = bw*PI;
 
         for(j = 0; j < length; j++){
-            i = j/Sinc_Ratio - spb/2;    // i is the oversampled step size
+            i = FP64(j)/FP64(Sinc_Ratio) - spb/2;    // i is the oversampled step size
 
                 // When i is not zero, generate sinc pulse as usual
             if(i != 0){
@@ -120,9 +124,9 @@ void Sinc_Init(FP32 bw, FP32 cbw, INT32U spb, INT16U ratio){
  * Last Major Revision: 10/17/2016
  ******************************************************************************/
 void Sinc_Gen_TX(CINT16 * table, INT16U ampl, INT16U spb, FP32 tau, bool I_en){
-    INT32   i       = 0;                    // Counter
-    INT32   j       = 0;                    // Counter
-    INT32   k       = 0;                    // Counter
+    INT32U  i       = 0;                    // Counter
+    INT32U  j       = 0;                    // Counter
+    INT32U  k       = 0;                    // Counter
     INT32U  shift   = 0;                    // Starting point of undersampling
     FP32    scale   = 0;                    // Scale variable
 
@@ -130,23 +134,26 @@ void Sinc_Gen_TX(CINT16 * table, INT16U ampl, INT16U spb, FP32 tau, bool I_en){
 
         // Invert tau direction
     tau = -tau;
-
+    //std::cout << boost::format("Tau     %10.7f") % (tau) << std::endl;
         // Make shift always positive
     while(tau >= spb){
-        tau -= spb;
+        tau -= (FP32)spb;
     }
     while(tau < 0){
-        tau += spb;
+        tau += (FP32)spb;
     }
 
-    shift = tau*Sinc_Ratio;        // Compute starting point of undersampling
+    shift = (INT32U)(tau*(FP32)Sinc_Ratio);        // Compute starting point of undersampling
 
-        /** Generate Pulse ****************************************************/
+    //std::cout << boost::format("Shift %10i") % (shift) << std::endl;
+
+    /** Generate Pulse ****************************************************/
 
     j = shift;
     for(i = 0; i < spb*Sinc_Ratio; i = i + Sinc_Ratio){
         table[k].real() = Sinc_Table[i].real()*scale*I_en;
         table[k].imag() = Sinc_Table[j].real()*scale;
+        //std::cout << boost::format("j =  %10i") % (j) << std::endl;
 
         k++;
         j = j + Sinc_Ratio;
@@ -173,7 +180,7 @@ void Sinc_Gen_TX(CINT16 * table, INT16U ampl, INT16U spb, FP32 tau, bool I_en){
  * M.Overdick, J.Canfield, and A.G. Klein
  * Last Major Revision: 10/17/2016
  ******************************************************************************/
-void Sinc_Gen_XC(CINT16 * table, INT16 ampl, INT16U spb){
+void Sinc_Gen_XC(CINT64 * table, INT64 ampl, INT16U spb){
         // Counters
     INT32   i       = 0;                    // Counter
     INT32U  j       = 0;                    // Counter
@@ -182,7 +189,7 @@ void Sinc_Gen_XC(CINT16 * table, INT16 ampl, INT16U spb){
 
         // Generate first part of delayed pulse
     for(i = 0; i < spb*Sinc_Ratio; i = i + Sinc_Ratio){
-        table[j] = CINT16(Sinc_Table[i].real()*scale, Sinc_Table[i].imag()*scale);
+        table[j] = CINT64(Sinc_Table[i].real()*scale, Sinc_Table[i].imag()*scale);
         j++;
     }
 }
@@ -211,4 +218,35 @@ static bool Sinc_Read(){
     }else{}
 
     return success;
+}
+
+/*******************************************************************************
+ * Cuda_Sinc_Gen_XC() - Loads array with complex sinc pulse
+ *
+ * ARGUMENTS:
+ *     CINT16* table   -   A pointer to the first element of an array of length
+ *                         spb.
+ *     INT16   ampl    -   The peak amplitude of the delayed sinc pulse, choose
+ *                         a number between 0 - 32767.
+ *     INT16U  spb     -   Samples per buffer.
+ *
+ * RETURNS:
+ *     A template sinc pulse for cross correlation
+ *
+ * M.Overdick, J.Canfield, and A.G. Klein
+ * Last Major Revision: 10/17/2016
+ ******************************************************************************/
+void Cuda_Sinc_Gen_XC(FP32 * table_real, FP32 * table_imag, INT64 ampl, INT16U spb){
+        // Counters
+    INT32   i       = 0;                    // Counter
+    INT32U  j       = 0;                    // Counter
+    INT32U  remain  = 0;                    // Leftover space in over sample vector
+    FP32    scale   = FP32(ampl)/SCALAR;    // Scalar for pulse amplitude
+
+        // Generate first part of delayed pulse
+    for(i = 0; i < spb*Sinc_Ratio; i = i + Sinc_Ratio){
+        table_real[j] = (INT64)Sinc_Table[i].real()*scale;
+        table_imag[j] = (INT64)Sinc_Table[i].imag()*scale;
+        j++;
+    }
 }
